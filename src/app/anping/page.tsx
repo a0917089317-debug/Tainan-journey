@@ -5,7 +5,7 @@ import { ParallaxHeroImage } from "@/components/parallax-hero-image";
 import { AnpingDartGame } from "@/components/anping-dart-game";
 
 export const metadata: Metadata = {
-  title: "安平一日散策 | 台南獨旅",
+  title: "安平一日旅行散策 | 台南獨旅",
   description:
     "台南安平景點推薦：安平古堡、安平老街、安平樹屋、億載金城，獻給喜歡一個人慢慢走的旅人。",
 };
@@ -94,7 +94,7 @@ const venueScheduleUrl =
 const eats = [
   {
     name: "牛園火鍋 安平店",
-    desc: "開在安億路上，鄰近安平漁人碼頭，中式庭園風格的用餐空間，紅燈籠與梅花裝飾很有氛圍。肉盤、海鮮拼盤新鮮豐盛，湯頭選擇多，一個人也能自在吃小火鍋。",
+    desc: "開在安億路上，鄰近安平漁人碼頭，中式庭園風格的用餐空間，紅燈籠與梅花裝飾很有氛圍。肉盤、海鮮拼盤新鮮豐盛，湯頭選擇多，一個人也能自在吃火鍋。",
     address: "台南市安平區安億路．鄰近安平漁人碼頭",
     images: [
       { src: "/images/牛園火鍋室內用餐環境.webp", alt: "牛園火鍋安平店室內用餐環境" },
