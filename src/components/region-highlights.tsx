@@ -374,8 +374,8 @@ export function RegionHighlightsMenu({
             </div>
             {optError && <p className="mt-2 text-xs text-amber-300">{optError}</p>}
             {Object.values(coords).some((c) => c?.approximate) && (
-              <p className="mt-2 text-xs text-muted">
-                部分地點找不到精確位置，以所在行政區估算。
+              <p className="mt-3 rounded-lg border border-amber-400/60 bg-amber-400/15 px-3 py-2 text-sm text-amber-200">
+                ⚠️ 部分地點找不到精確位置，以所在行政區估算。如果該景點只顯示 XX 區，請刪除該景點，否則無法顯示藍色線的路線圖。
               </p>
             )}
             {mode === "transit" && routePoints.length > 2 && (
