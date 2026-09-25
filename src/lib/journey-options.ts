@@ -107,3 +107,14 @@ export type JourneyRequest = {
   lodging: LodgingId;
   people: number;
 };
+
+export type DistrictHighlights = {
+  name: string;
+  spots: string[];
+  foods: string[];
+};
+
+export type RegionHighlights = {
+  name: string;
+  districts: DistrictHighlights[];
+};

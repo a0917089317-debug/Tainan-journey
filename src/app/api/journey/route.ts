@@ -5,7 +5,10 @@ import {
   MAX_PEOPLE,
   transports,
   type JourneyRequest,
+  type DistrictHighlights,
+  type RegionHighlights,
 } from "@/lib/journey-options";
+import { foodDistricts } from "@/lib/tainan-food";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -75,6 +78,32 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed }, { status: 400 });
   }
 
+  const [analysis, highlights] = await Promise.all([
+    chat(apiKey, SYSTEM_PROMPT, buildPrompt(parsed)),
+    chat(apiKey, HIGHLIGHTS_PROMPT, parsed.destinations.join("、"), true)
+      .then((text) => (text ? parseHighlights(text) : []))
+      .catch(() => []),
+  ]);
+
+  if (analysis === null) {
+    return Response.json(
+      { error: "AI 分析失敗，請稍後再試" },
+      { status: 502 },
+    );
+  }
+
+  return Response.json({
+    analysis,
+    highlights: mergeCuratedTainan(highlights),
+  });
+}
+
+async function chat(
+  apiKey: string,
+  system: string,
+  user: string,
+  json = false,
+): Promise<string | null> {
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -84,21 +113,83 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildPrompt(parsed) },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
+      ...(json && { response_format: { type: "json_object" }, temperature: 0.2 }),
     }),
   });
 
   if (!res.ok) {
     console.error("OpenAI error", res.status, await res.text());
-    return Response.json(
-      { error: "AI 分析失敗，請稍後再試" },
-      { status: 502 },
-    );
+    return null;
   }
 
   const data = await res.json();
-  const analysis: string = data.choices?.[0]?.message?.content ?? "";
-  return Response.json({ analysis });
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+const HIGHLIGHTS_PROMPT = `你是在地旅遊達人，請用繁體中文回答。
+使用者會給你幾個縣市（台灣）或都道府縣（日本）。針對每一個，挑出最值得去的 5～8 個行政區或地區，
+每區列出 3～5 個知名景點（spots）與 3～5 家知名店家（foods）。
+規則：
+- 景點與店家必須確實位於該行政區內，不可把別區的放進來。
+- foods 請給具體店名（例如「阿財牛肉湯」「度小月擔仔麵」），不要給泛稱（例如「海鮮粥」「鹽酥雞」）。
+- 只列真實存在、確定知名的名稱；不確定就少列，寧缺勿濫，絕對不要編造。
+只回傳 JSON，格式：
+{"regions":[{"name":"台南市","districts":[{"name":"安平區","spots":["安平古堡"],"foods":["阿財牛肉湯"]}]}]}`;
+
+function stringList(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .map((v) => v.trim().slice(0, 40))
+    .slice(0, max);
+}
+
+function parseHighlights(text: string): RegionHighlights[] {
+  try {
+    const regions = JSON.parse(text)?.regions;
+    if (!Array.isArray(regions)) return [];
+    return regions
+      .filter((r) => typeof r?.name === "string" && Array.isArray(r.districts))
+      .map((r) => ({
+        name: r.name,
+        districts: r.districts
+          .filter((d: unknown) => typeof (d as { name?: unknown })?.name === "string")
+          .slice(0, 8)
+          .map((d: { name: string; spots?: unknown; foods?: unknown }) => ({
+            name: d.name,
+            spots: stringList(d.spots, 8),
+            foods: stringList(d.foods, 8),
+          })),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// Fold our hand-curated Tainan list (e.g. 安平) into the AI result.
+function mergeCuratedTainan(regions: RegionHighlights[]): RegionHighlights[] {
+  const tainan = regions.find((r) => r.name.includes("台南") || r.name.includes("臺南"));
+  if (!tainan) return regions;
+
+  const added: DistrictHighlights[] = [];
+  for (const curated of foodDistricts) {
+    const spots = curated.spots ?? [];
+    if (curated.foods.length === 0 && spots.length === 0) continue;
+
+    const key = curated.name.replace(/區$/, "");
+    let district = tainan.districts.find((d) => d.name.replace(/區$/, "") === key);
+    if (!district) {
+      district = { name: curated.name, spots: [], foods: [] };
+      added.push(district);
+    }
+    district.spots = [...new Set([...spots, ...district.spots])];
+    district.foods = [...new Set([...curated.foods, ...district.foods])];
+  }
+  // AI districts first, then curated extras; ones with spots (e.g. 安平) lead.
+  added.sort((a, b) => b.spots.length - a.spots.length);
+  tainan.districts.push(...added);
+  return regions;
 }

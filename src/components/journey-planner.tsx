@@ -9,8 +9,10 @@ import {
   transports,
   type Country,
   type LodgingId,
+  type RegionHighlights,
   type TransportId,
 } from "@/lib/journey-options";
+import { RegionHighlightsMenu } from "@/components/region-highlights";
 
 const CARD = "rounded-2xl border border-border bg-background-elevated p-6";
 
@@ -96,6 +98,8 @@ export function JourneyPlanner() {
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState("");
   const [resultCountry, setResultCountry] = useState<Country>("taiwan");
+  const [highlights, setHighlights] = useState<RegionHighlights[]>([]);
+  const [resultTransport, setResultTransport] = useState<TransportId | null>(null);
 
   const canSubmit =
     selected.length > 0 && transport !== null && lodging !== null && !loading;
@@ -117,6 +121,7 @@ export function JourneyPlanner() {
     setLoading(true);
     setError("");
     setAnalysis("");
+    setHighlights([]);
     try {
       const res = await fetch("/api/journey", {
         method: "POST",
@@ -132,6 +137,8 @@ export function JourneyPlanner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "發生錯誤");
       setAnalysis(data.analysis);
+      setHighlights(data.highlights ?? []);
+      setResultTransport(transport);
       setResultCountry(country);
     } catch (err) {
       setError(err instanceof Error ? err.message : "發生錯誤");
@@ -247,6 +254,15 @@ export function JourneyPlanner() {
         <p className="rounded-xl border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm text-red-300">
           {error}
         </p>
+      )}
+
+      {highlights.length > 0 && resultTransport && (
+        <RegionHighlightsMenu
+          key={analysis}
+          regions={highlights}
+          transport={resultTransport}
+          country={resultCountry}
+        />
       )}
 
       {analysis && (

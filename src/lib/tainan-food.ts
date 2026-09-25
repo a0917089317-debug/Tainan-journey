@@ -4,6 +4,7 @@ export type FoodDistrict = {
   x: number;
   y: number;
   foods: string[];
+  spots?: string[];
 };
 
 export const FOOD_MAP_SIZE = { width: 595, height: 515 };
@@ -49,6 +50,7 @@ export const foodDistricts: FoodDistrict[] = [
     x: 112,
     y: 405,
     foods: ["文章牛肉湯", "阿財牛肉湯", "丹丹漢堡平豐店", "王氏魚皮", "牛園火鍋", "慶平海產"],
+    spots: ["安平古堡", "億載金城"],
   },
   { name: "東區", x: 190, y: 403, foods: [] },
   { name: "南區", x: 125, y: 433, foods: [] },
