@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { Country, RegionHighlights, TransportId } from "@/lib/journey-options";
 import { distanceKm, shortestPath, totalKm, type LatLng } from "@/lib/route-optimizer";
-import { RouteMap, type MapStop } from "./route-map";
 
 type Geocoded = (LatLng & { approximate: boolean }) | null;
 
@@ -145,15 +144,6 @@ export function RegionHighlightsMenu({
     ...stops.map(coordOf),
   ];
   const allLocated = routeCoords.every((c): c is NonNullable<typeof c> => c !== null);
-
-  const mapStops: MapStop[] = [
-    ...(myLatLng ? [{ ...myLatLng, label: "◎", start: true }] : []),
-    ...stops.flatMap((s, i) => {
-      const c = coordOf(s);
-      return c ? [{ lat: c.lat, lng: c.lng, label: String(i + 1) }] : [];
-    }),
-  ];
-  const locating = stops.some((s) => !(s.key in coords));
 
   function legKm(a: LatLng | null, b: LatLng | null) {
     return a && b ? ` 約 ${formatKm(distanceKm(a, b))}` : "";
@@ -492,17 +482,6 @@ export function RegionHighlightsMenu({
                 </li>
               ))}
             </ol>
-
-            {mapStops.length > 0 ? (
-              <RouteMap stops={mapStops} />
-            ) : (
-              <p className="mt-4 text-xs text-muted">
-                {locating ? "正在查詢各站位置…" : "找不到這些地點的位置，無法畫出路線"}
-              </p>
-            )}
-            {mapStops.length > 0 && locating && (
-              <p className="text-xs text-muted">還有地點在查詢位置，查到後會加進地圖</p>
-            )}
           </div>
 
           <aside>

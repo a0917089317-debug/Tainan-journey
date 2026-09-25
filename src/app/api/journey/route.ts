@@ -14,7 +14,7 @@ import { OPENAI_KEY_HEADER } from "@/lib/openai-key";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 // Names we never show, even if the AI suggests them.
-const EXCLUDED_NAMES = ["安平豆花"];
+const EXCLUDED_NAMES = ["安平豆花", "安平豆干"];
 const EXCLUDE_RULE = `不要提到或推薦：${EXCLUDED_NAMES.join("、")}。`;
 
 function parseRequest(body: unknown): JourneyRequest | string {
