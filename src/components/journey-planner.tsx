@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { ApiKeySettings } from "@/components/api-key-settings";
+import { getOpenAIKey, OPENAI_KEY_HEADER, subscribeOpenAIKey } from "@/lib/openai-key";
 import {
   countryLabels,
   destinations,
@@ -101,8 +103,14 @@ export function JourneyPlanner() {
   const [highlights, setHighlights] = useState<RegionHighlights[]>([]);
   const [resultTransport, setResultTransport] = useState<TransportId | null>(null);
 
+  const apiKey = useSyncExternalStore(subscribeOpenAIKey, getOpenAIKey, () => "");
+
   const canSubmit =
-    selected.length > 0 && transport !== null && lodging !== null && !loading;
+    apiKey !== "" &&
+    selected.length > 0 &&
+    transport !== null &&
+    lodging !== null &&
+    !loading;
 
   function switchCountry(next: Country) {
     setCountry(next);
@@ -125,7 +133,10 @@ export function JourneyPlanner() {
     try {
       const res = await fetch("/api/journey", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [OPENAI_KEY_HEADER]: apiKey,
+        },
         body: JSON.stringify({
           country,
           destinations: selected,
@@ -148,154 +159,162 @@ export function JourneyPlanner() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-12 flex flex-col gap-8">
-      <section className={CARD}>
-        <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
-          1. 要去的地方
-        </h2>
-        <div className="mt-4 flex gap-2">
-          {(Object.keys(countryLabels) as Country[]).map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => switchCountry(c)}
-              className={`rounded-full border px-5 py-2 text-sm transition-colors ${
-                country === c
-                  ? "border-accent bg-accent text-background"
-                  : "border-border text-muted hover:text-foreground"
-              }`}
-            >
-              {countryLabels[c]}
-            </button>
-          ))}
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {destinations[country].map((d) => {
-            const active = selected.includes(d.name);
-            return (
-              <label key={d.name} className={optionClass(active)}>
+    <div>
+      <ApiKeySettings apiKey={apiKey} />
+      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-8">
+        <section className={CARD}>
+          <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
+            1. 要去的地方
+          </h2>
+          <div className="mt-4 flex gap-2">
+            {(Object.keys(countryLabels) as Country[]).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => switchCountry(c)}
+                className={`rounded-full border px-5 py-2 text-sm transition-colors ${
+                  country === c
+                    ? "border-accent bg-accent text-background"
+                    : "border-border text-muted hover:text-foreground"
+                }`}
+              >
+                {countryLabels[c]}
+              </button>
+            ))}
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {destinations[country].map((d) => {
+              const active = selected.includes(d.name);
+              return (
+                <label key={d.name} className={optionClass(active)}>
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => toggleDestination(d.name)}
+                    className="mr-2 accent-[var(--accent)]"
+                  />
+                  <span className="font-medium">{d.name}</span>
+                  <span className="mt-1 block text-xs text-muted">{d.spots}</span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+  
+        <section className={CARD}>
+          <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
+            2. 怎麼去
+          </h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {transports.map((t) => (
+              <label key={t.id} className={optionClass(transport === t.id)}>
                 <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggleDestination(d.name)}
+                  type="radio"
+                  name="transport"
+                  checked={transport === t.id}
+                  onChange={() => setTransport(t.id)}
                   className="mr-2 accent-[var(--accent)]"
                 />
-                <span className="font-medium">{d.name}</span>
-                <span className="mt-1 block text-xs text-muted">{d.spots}</span>
+                {t.label}
               </label>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
-          2. 怎麼去
-        </h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {transports.map((t) => (
-            <label key={t.id} className={optionClass(transport === t.id)}>
-              <input
-                type="radio"
-                name="transport"
-                checked={transport === t.id}
-                onChange={() => setTransport(t.id)}
-                className="mr-2 accent-[var(--accent)]"
-              />
-              {t.label}
-            </label>
-          ))}
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
-          3. 住宿
-        </h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {lodgings.map((l) => (
-            <label key={l.id} className={optionClass(lodging === l.id)}>
-              <input
-                type="radio"
-                name="lodging"
-                checked={lodging === l.id}
-                onChange={() => setLodging(l.id)}
-                className="mr-2 accent-[var(--accent)]"
-              />
-              {l.label}
-            </label>
-          ))}
-        </div>
-        <label className="mt-5 flex items-center gap-3 text-sm text-muted">
-          人數
-          <select
-            value={people}
-            onChange={(e) => setPeople(Number(e.target.value))}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-foreground"
-          >
-            {Array.from({ length: MAX_PEOPLE }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n} 人
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
-
-      <button
-        type="submit"
-        disabled={!canSubmit}
-        className="self-start rounded-full bg-accent px-8 py-3 text-sm font-medium text-background transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {loading ? "AI 分析中…" : "開始分析"}
-      </button>
-
-      {error && (
-        <p className="rounded-xl border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm text-red-300">
-          {error}
-        </p>
-      )}
-
-      {highlights.length > 0 && resultTransport && (
-        <RegionHighlightsMenu
-          key={analysis}
-          regions={highlights}
-          transport={resultTransport}
-          country={resultCountry}
-        />
-      )}
-
-      {analysis && (
-        <section className={CARD}>
-          <h2 className="font-[family-name:var(--font-serif-tc)] text-xl text-accent">
-            AI 分析結果
-          </h2>
-          <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-foreground">
-            {analysis.split("\n").map((line, i) => (
-              <div key={i}>
-                {line || " "}
-                {resultCountry === "taiwan" && RAIL_PATTERN.test(line) && (
-                  <ShortcutLinks links={railLinks} />
-                )}
-                {resultCountry === "taiwan" && BIKE_PATTERN.test(line) && (
-                  <ShortcutLinks links={bikeLinks} tone="green" />
-                )}
-                {resultCountry === "taiwan" && RENT_PATTERN.test(line) && (
-                  <ShortcutLinks
-                    links={rentLinks}
-                    note="火車站附近尚有數家出租機車的店家可供參考"
-                  />
-                )}
-                {resultCountry === "taiwan" && line.includes("機車") && (
-                  <span className="mb-1 block text-xs text-amber-300">
-                    （貼心提醒：記得攜帶個人證件／駕照／雨具）
-                  </span>
-                )}
-              </div>
             ))}
           </div>
         </section>
-      )}
-    </form>
+  
+        <section className={CARD}>
+          <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">
+            3. 住宿
+          </h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {lodgings.map((l) => (
+              <label key={l.id} className={optionClass(lodging === l.id)}>
+                <input
+                  type="radio"
+                  name="lodging"
+                  checked={lodging === l.id}
+                  onChange={() => setLodging(l.id)}
+                  className="mr-2 accent-[var(--accent)]"
+                />
+                {l.label}
+              </label>
+            ))}
+          </div>
+          <label className="mt-5 flex items-center gap-3 text-sm text-muted">
+            人數
+            <select
+              value={people}
+              onChange={(e) => setPeople(Number(e.target.value))}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-foreground"
+            >
+              {Array.from({ length: MAX_PEOPLE }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n} 人
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+  
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="self-start rounded-full bg-accent px-8 py-3 text-sm font-medium text-background transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {loading ? "AI 分析中…" : "開始分析"}
+        </button>
+        {!apiKey && (
+          <p className="-mt-5 text-xs text-amber-300">
+            請先在上方「API 設定」輸入你的 OpenAI API Key 才能開始分析
+          </p>
+        )}
+  
+        {error && (
+          <p className="rounded-xl border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm text-red-300">
+            {error}
+          </p>
+        )}
+  
+        {highlights.length > 0 && resultTransport && (
+          <RegionHighlightsMenu
+            key={analysis}
+            regions={highlights}
+            transport={resultTransport}
+            country={resultCountry}
+          />
+        )}
+  
+        {analysis && (
+          <section className={CARD}>
+            <h2 className="font-[family-name:var(--font-serif-tc)] text-xl text-accent">
+              AI 分析結果
+            </h2>
+            <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-foreground">
+              {analysis.split("\n").map((line, i) => (
+                <div key={i}>
+                  {line || " "}
+                  {resultCountry === "taiwan" && RAIL_PATTERN.test(line) && (
+                    <ShortcutLinks links={railLinks} />
+                  )}
+                  {resultCountry === "taiwan" && BIKE_PATTERN.test(line) && (
+                    <ShortcutLinks links={bikeLinks} tone="green" />
+                  )}
+                  {resultCountry === "taiwan" && RENT_PATTERN.test(line) && (
+                    <ShortcutLinks
+                      links={rentLinks}
+                      note="火車站附近尚有數家出租機車的店家可供參考"
+                    />
+                  )}
+                  {resultCountry === "taiwan" && line.includes("機車") && (
+                    <span className="mb-1 block text-xs text-amber-300">
+                      （貼心提醒：記得攜帶個人證件／駕照／雨具）
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </form>
+    </div>
   );
 }

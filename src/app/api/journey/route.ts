@@ -9,6 +9,7 @@ import {
   type RegionHighlights,
 } from "@/lib/journey-options";
 import { foodDistricts } from "@/lib/tainan-food";
+import { OPENAI_KEY_HEADER } from "@/lib/openai-key";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -65,11 +66,12 @@ const SYSTEM_PROMPT = `你是一位熟悉台灣與日本的旅遊規劃師，請
 內容務實精簡，使用清楚的標題與條列。`;
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  // BYOK: the visitor's own key, sent per request. Never stored or logged here.
+  const apiKey = request.headers.get(OPENAI_KEY_HEADER)?.trim();
   if (!apiKey) {
     return Response.json(
-      { error: "伺服器尚未設定 OPENAI_API_KEY" },
-      { status: 500 },
+      { error: "請先在「API 設定」輸入你的 OpenAI API Key" },
+      { status: 401 },
     );
   }
 
@@ -81,11 +83,24 @@ export async function POST(request: Request) {
   const [analysis, highlights] = await Promise.all([
     chat(apiKey, SYSTEM_PROMPT, buildPrompt(parsed)),
     chat(apiKey, HIGHLIGHTS_PROMPT, parsed.destinations.join("、"), true)
-      .then((text) => (text ? parseHighlights(text) : []))
+      .then((r) => (typeof r === "string" ? parseHighlights(r) : []))
       .catch(() => []),
   ]);
 
-  if (analysis === null) {
+  if (typeof analysis !== "string") {
+    const { status } = analysis;
+    if (status === 401) {
+      return Response.json(
+        { error: "OpenAI API Key 無效，請到「API 設定」重新確認" },
+        { status: 401 },
+      );
+    }
+    if (status === 429) {
+      return Response.json(
+        { error: "OpenAI 額度不足或請求太頻繁，請確認你的帳戶用量" },
+        { status: 429 },
+      );
+    }
     return Response.json(
       { error: "AI 分析失敗，請稍後再試" },
       { status: 502 },
@@ -103,7 +118,7 @@ async function chat(
   system: string,
   user: string,
   json = false,
-): Promise<string | null> {
+): Promise<string | { status: number }> {
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -121,8 +136,9 @@ async function chat(
   });
 
   if (!res.ok) {
-    console.error("OpenAI error", res.status, await res.text());
-    return null;
+    // Status only: OpenAI's error body can echo part of the visitor's key.
+    console.error("OpenAI error", res.status);
+    return { status: res.status };
   }
 
   const data = await res.json();
