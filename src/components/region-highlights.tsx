@@ -1,12 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Country, RegionHighlights, TransportId } from "@/lib/journey-options";
 import { distanceKm, shortestPath, totalKm, type LatLng } from "@/lib/route-optimizer";
+import { RouteMap, type MapStop } from "./route-map";
 
 type Geocoded = (LatLng & { approximate: boolean }) | null;
 
 const MAX_GEOCODE = 12;
+
+async function fetchCoords(targets: Stop[], country: Country) {
+  const res = await fetch("/api/geocode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      places: targets.map((s) => ({
+        name: s.name,
+        region: s.region,
+        district: s.district,
+        country,
+      })),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "查詢座標失敗");
+  return Object.fromEntries(
+    targets.map((s, i) => [s.key, (data.results[i] ?? null) as Geocoded]),
+  );
+}
 
 function parseLatLng(value: string): LatLng {
   const [lat, lng] = value.split(",").map(Number);
@@ -63,15 +84,6 @@ function directionsUrl(points: string[], mode: string) {
   return `https://www.google.com/maps/dir/?${params}`;
 }
 
-function embedUrl(points: string[]) {
-  const [first, ...rest] = points;
-  if (rest.length === 0) {
-    return `https://maps.google.com/maps?q=${encodeURIComponent(first)}&output=embed`;
-  }
-  const daddr = rest.map(encodeURIComponent).join("+to:");
-  return `https://maps.google.com/maps?saddr=${encodeURIComponent(first)}&daddr=${daddr}&output=embed`;
-}
-
 function pillClass(active: boolean) {
   return `rounded-full border px-4 py-1.5 text-sm transition-colors ${
     active
@@ -100,6 +112,19 @@ export function RegionHighlightsMenu({
   const [optimizedKey, setOptimizedKey] = useState<string | null>(null);
   const [optError, setOptError] = useState("");
 
+  // Locate newly added stops so the map can draw the route.
+  useEffect(() => {
+    const missing = stops.filter((s) => !(s.key in coords)).slice(0, MAX_GEOCODE);
+    if (missing.length === 0) return;
+    // Debounced: the geocoder allows ~1 lookup/second.
+    const timer = setTimeout(() => {
+      fetchCoords(missing, country)
+        .then((found) => setCoords((prev) => ({ ...prev, ...found })))
+        .catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [stops, coords, country]);
+
   const region = regions[regionIndex];
   if (!region) return null;
   const district = region.districts[districtIndex];
@@ -121,6 +146,15 @@ export function RegionHighlightsMenu({
   ];
   const allLocated = routeCoords.every((c): c is NonNullable<typeof c> => c !== null);
 
+  const mapStops: MapStop[] = [
+    ...(myLatLng ? [{ ...myLatLng, label: "◎", start: true }] : []),
+    ...stops.flatMap((s, i) => {
+      const c = coordOf(s);
+      return c ? [{ lat: c.lat, lng: c.lng, label: String(i + 1) }] : [];
+    }),
+  ];
+  const locating = stops.some((s) => !(s.key in coords));
+
   function legKm(a: LatLng | null, b: LatLng | null) {
     return a && b ? ` 約 ${formatKm(distanceKm(a, b))}` : "";
   }
@@ -134,25 +168,9 @@ export function RegionHighlightsMenu({
     setOptError("");
     try {
       const missing = stops.filter((s) => !(s.key in coords));
-      const found = { ...coords };
+      let found = coords;
       if (missing.length > 0) {
-        const res = await fetch("/api/geocode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            places: missing.map((s) => ({
-              name: s.name,
-              region: s.region,
-              district: s.district,
-              country,
-            })),
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "查詢座標失敗");
-        missing.forEach((s, i) => {
-          found[s.key] = data.results[i] ?? null;
-        });
+        found = { ...coords, ...(await fetchCoords(missing, country)) };
         setCoords(found);
       }
 
@@ -475,13 +493,16 @@ export function RegionHighlightsMenu({
               ))}
             </ol>
 
-            <iframe
-              key={routePoints.join("|")}
-              title="路線地圖"
-              src={embedUrl(routePoints)}
-              loading="lazy"
-              className="mt-4 h-72 w-full rounded-xl border border-border"
-            />
+            {mapStops.length > 0 ? (
+              <RouteMap stops={mapStops} />
+            ) : (
+              <p className="mt-4 text-xs text-muted">
+                {locating ? "正在查詢各站位置…" : "找不到這些地點的位置，無法畫出路線"}
+              </p>
+            )}
+            {mapStops.length > 0 && locating && (
+              <p className="text-xs text-muted">還有地點在查詢位置，查到後會加進地圖</p>
+            )}
           </div>
 
           <aside>
