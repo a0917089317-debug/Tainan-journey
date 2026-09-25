@@ -13,6 +13,10 @@ import { OPENAI_KEY_HEADER } from "@/lib/openai-key";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
+// Names we never show, even if the AI suggests them.
+const EXCLUDED_NAMES = ["安平豆花"];
+const EXCLUDE_RULE = `不要提到或推薦：${EXCLUDED_NAMES.join("、")}。`;
+
 function parseRequest(body: unknown): JourneyRequest | string {
   if (typeof body !== "object" || body === null) return "請求格式錯誤";
   const b = body as Record<string, unknown>;
@@ -63,7 +67,8 @@ const SYSTEM_PROMPT = `你是一位熟悉台灣與日本的旅遊規劃師，請
 3. 住宿建議：推薦住在哪一區，以及該住宿類型在此人數下的大約每晚價格
 4. 預估總預算（每人）
 5. 貼心提醒
-內容務實精簡，使用清楚的標題與條列。`;
+內容務實精簡，使用清楚的標題與條列。
+${EXCLUDE_RULE}`;
 
 export async function POST(request: Request) {
   // BYOK: the visitor's own key, sent per request. Never stored or logged here.
@@ -152,6 +157,7 @@ const HIGHLIGHTS_PROMPT = `你是在地旅遊達人，請用繁體中文回答�
 - 景點與店家必須確實位於該行政區內，不可把別區的放進來。
 - foods 請給具體店名（例如「阿財牛肉湯」「度小月擔仔麵」），不要給泛稱（例如「海鮮粥」「鹽酥雞」）。
 - 只列真實存在、確定知名的名稱；不確定就少列，寧缺勿濫，絕對不要編造。
+- ${EXCLUDE_RULE}
 只回傳 JSON，格式：
 {"regions":[{"name":"台南市","districts":[{"name":"安平區","spots":["安平古堡"],"foods":["阿財牛肉湯"]}]}]}`;
 
@@ -160,6 +166,7 @@ function stringList(value: unknown, max: number): string[] {
   return value
     .filter((v): v is string => typeof v === "string" && v.trim() !== "")
     .map((v) => v.trim().slice(0, 40))
+    .filter((v) => !EXCLUDED_NAMES.some((name) => v.includes(name)))
     .slice(0, max);
 }
 
