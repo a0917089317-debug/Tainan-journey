@@ -7,6 +7,8 @@ const links = [
   { href: "/#districts", label: "地區" },
   { href: "/#spots", label: "景點" },
   { href: "/anping", label: "安平" },
+  { href: "/japan", label: "日本自由行" },
+  { href: "/journey", label: "AI 行程" },
   { href: "/#itinerary", label: "一日行程" },
   { href: "/#stays", label: "住宿" },
 ];
